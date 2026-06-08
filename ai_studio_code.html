@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lumina | Premium Microlearning</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --oled-black: #000000;
+            --gold: #D4AF37;
+            --slate: #1E293B;
+        }
+        body {
+            background-color: var(--oled-black);
+            color: #F8FAFC;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden; /* Prevent bounce on mobile */
+        }
+        .serif { font-family: 'Playfair Display', serif; }
+        .card-enter { opacity: 0; transform: translateY(20px); }
+        .card-active { opacity: 1; transform: translateY(0); transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1); }
+        .card-exit { opacity: 0; transform: translateY(-20px); transition: all 0.4s ease-in; }
+        .bg-oled { background-color: var(--oled-black); }
+        .border-gold { border-color: var(--gold); }
+        .text-gold { color: var(--gold); }
+    </style>
+</head>
+<body class="bg-oled min-h-screen flex flex-col items-center justify-center p-6 sm:p-12">
+
+    <!-- Header & Topic Selector -->
+    <div id="setup-screen" class="w-full max-w-md space-y-10 text-center">
+        <div class="space-y-2">
+            <h1 class="serif text-5xl font-bold tracking-tight text-white">Lumina</h1>
+            <p class="text-slate-400 font-light tracking-widest uppercase text-xs">Aesthetic Microlearning</p>
+        </div>
+
+        <div class="space-y-4">
+            <label class="block text-sm font-medium text-slate-500 uppercase tracking-widest">Select Discipline</label>
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="setTopic('Philosophy')" class="topic-btn border border-slate-800 p-4 rounded-xl hover:border-amber-500/50 transition bg-slate-900/50">Philosophy</button>
+                <button onclick="setTopic('History')" class="topic-btn border border-slate-800 p-4 rounded-xl hover:border-amber-500/50 transition bg-slate-900/50">History</button>
+                <button onclick="setTopic('Science')" class="topic-btn border border-slate-800 p-4 rounded-xl hover:border-amber-500/50 transition bg-slate-900/50">Science</button>
+                <button onclick="setTopic('Art')" class="topic-btn border border-slate-800 p-4 rounded-xl hover:border-amber-500/50 transition bg-slate-900/50">Art Theory</button>
+            </div>
+            <input type="text" id="api-key" placeholder="Enter Gemini API Key" class="w-full bg-transparent border-b border-slate-800 py-3 text-center focus:outline-none focus:border-amber-500 text-amber-100 placeholder:text-slate-700" />
+        </div>
+    </div>
+
+    <!-- Learning Card Container -->
+    <div id="card-container" class="hidden w-full max-w-md h-[70vh] flex flex-col justify-between items-center text-center relative">
+        <!-- Progress Bar -->
+        <div class="w-full h-1 bg-slate-900 absolute top-[-40px]">
+            <div id="progress" class="h-full bg-amber-500 transition-all duration-500" style="width: 0%"></div>
+        </div>
+
+        <!-- Dynamic Card -->
+        <div id="current-card" class="card-active flex flex-col justify-center items-center space-y-8 flex-grow px-4">
+            <!-- Content injected here -->
+        </div>
+
+        <!-- Footer Controls -->
+        <div class="w-full flex justify-between items-center pt-8 border-t border-slate-900/50">
+            <button onclick="prevCard()" class="p-4 text-slate-500 hover:text-white transition"><i data-lucide="chevron-left"></i></button>
+            <span id="card-counter" class="text-xs tracking-tighter text-slate-600 font-mono">01 / 05</span>
+            <button onclick="nextCard()" id="next-btn" class="p-4 text-amber-500 hover:text-amber-400 transition"><i data-lucide="chevron-right"></i></button>
+        </div>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loader" class="hidden fixed inset-0 bg-black flex items-center justify-center z-50">
+        <div class="serif text-2xl italic text-amber-500 animate-pulse">Curating knowledge...</div>
+    </div>
+
+    <script>
+        let cards = [];
+        let currentIndex = 0;
+        const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+
+        async function setTopic(topic) {
+            const apiKey = document.getElementById('api-key').value;
+            if (!apiKey) return alert("Please enter your Gemini API Key.");
+
+            showLoader(true);
+            
+            try {
+                const response = await fetch(`${API_URL}?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{
+                                text: `Generate 5 educational micro-learning cards about ${topic}. 
+                                Format: Valid JSON array of objects.
+                                Each object: {"title": "Short catchy title", "content": "1-2 punchy, insightful sentences", "icon": "Lucide icon name (e.g. brain, scroll, atom)"}
+                                Tone: Premium, philosophical, concise.`
+                            }]
+                        }],
+                        generationConfig: { response_mime_type: "application/json" }
+                    })
+                });
+
+                const data = await response.json();
+                cards = JSON.parse(data.candidates[0].content.parts[0].text);
+                
+                startApp();
+            } catch (error) {
+                console.error(error);
+                alert("Failed to generate content. Check your API key.");
+            } finally {
+                showLoader(false);
+            }
+        }
+
+        function startApp() {
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('card-container').classList.remove('hidden');
+            currentIndex = 0;
+            renderCard();
+        }
+
+        function renderCard() {
+            const container = document.getElementById('current-card');
+            const card = cards[currentIndex];
+            
+            // Fade out
+            container.classList.add('card-exit');
+            
+            setTimeout(() => {
+                container.innerHTML = `
+                    <div class="text-amber-500/20 mb-4 scale-150">
+                        <i data-lucide="${card.icon || 'book-open'}"></i>
+                    </div>
+                    <h2 class="serif text-4xl font-bold leading-tight text-white px-2">${card.title}</h2>
+                    <p class="text-slate-400 text-lg font-light leading-relaxed max-w-[280px]">${card.content}</p>
+                `;
+                
+                // Refresh Icons
+                lucide.createIcons();
+                
+                // Fade In
+                container.classList.remove('card-exit');
+                container.classList.add('card-enter');
+                requestAnimationFrame(() => {
+                    container.classList.remove('card-enter');
+                });
+
+                updateUI();
+            }, 300);
+        }
+
+        function nextCard() {
+            if (currentIndex < cards.length - 1) {
+                currentIndex++;
+                renderCard();
+            } else {
+                location.reload(); // Reset on finish
+            }
+        }
+
+        function prevCard() {
+            if (currentIndex > 0) {
+                currentIndex--;
+                renderCard();
+            }
+        }
+
+        function updateUI() {
+            document.getElementById('card-counter').innerText = `0${currentIndex + 1} / 0${cards.length}`;
+            document.getElementById('progress').style.width = `${((currentIndex + 1) / cards.length) * 100}%`;
+            
+            const nextBtn = document.getElementById('next-btn');
+            if (currentIndex === cards.length - 1) {
+                nextBtn.innerHTML = '<i data-lucide="refresh-cw"></i>';
+            } else {
+                nextBtn.innerHTML = '<i data-lucide="chevron-right"></i>';
+            }
+            lucide.createIcons();
+        }
+
+        function showLoader(show) {
+            document.getElementById('loader').classList.toggle('hidden', !show);
+        }
+
+        // Initialize Icons
+        lucide.createIcons();
+    </script>
+</body>
+</html>
