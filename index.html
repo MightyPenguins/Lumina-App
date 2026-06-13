@@ -1,10 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lumina</title>
+
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body class="bg-slate-950 text-white flex items-center justify-center h-screen">
+
+<!-- SETUP SCREEN -->
+<div id="setup-screen" class="text-center space-y-6">
+    <h1 class="text-4xl font-bold">Lumina</h1>
+
+    <input id="api-key" placeholder="(Optional) Gemini API Key"
+        class="px-4 py-2 rounded bg-slate-800 text-white w-64"/>
+
+    <div class="space-x-4">
+        <button onclick="setTopic('Philosophy')" class="bg-amber-500 px-4 py-2 rounded">Philosophy</button>
+        <button onclick="setTopic('History')" class="bg-blue-500 px-4 py-2 rounded">History</button>
+    </div>
+</div>
+
+<!-- CARD SCREEN -->
+<div id="card-container" class="hidden text-center space-y-6 max-w-md">
+
+    <div id="current-card" class="space-y-4"></div>
+
+    <div class="flex justify-between items-center">
+        <button onclick="prevCard()" class="px-4 py-2 bg-slate-700 rounded">Back</button>
+
+        <span id="card-counter">01 / 05</span>
+
+        <button id="next-btn" onclick="nextCard()" class="px-4 py-2 bg-slate-700 rounded">Next</button>
+    </div>
+
+    <div class="w-full bg-slate-800 h-2 rounded">
+        <div id="progress" class="bg-amber-500 h-2 rounded" style="width: 0%"></div>
+    </div>
+
+</div>
+
+<!-- LOADER -->
+<div id="loader" class="hidden absolute">Loading...</div>
+
 <script>
 let cards = [];
 let currentIndex = 0;
 
 const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
-// ✅ Fallback lessons (so app ALWAYS works)
 const fallbackLessons = {
     Philosophy: [
         { title: "Stoicism", content: "Focus only on what you control.", icon: "brain" },
@@ -25,10 +75,8 @@ const fallbackLessons = {
 async function setTopic(topic) {
     const apiKey = document.getElementById('api-key').value;
 
-    // ✅ Allow app to work WITHOUT API key
     if (!apiKey) {
-        console.warn("No API key — using fallback lessons");
-        cards = fallbackLessons[topic] || fallbackLessons["Philosophy"];
+        cards = fallbackLessons[topic];
         startApp();
         return;
     }
@@ -42,17 +90,14 @@ async function setTopic(topic) {
             body: JSON.stringify({
                 contents: [{
                     parts: [{
-                        text: `Return ONLY valid JSON.
-
-Format:
+                        text: `Return ONLY valid JSON:
 [
-  {"title": "Short title", "content": "1-2 sentence insight", "icon": "book-open"},
-  {"title": "Short title", "content": "1-2 sentence insight", "icon": "brain"},
-  {"title": "Short title", "content": "1-2 sentence insight", "icon": "atom"},
-  {"title": "Short title", "content": "1-2 sentence insight", "icon": "scroll"},
-  {"title": "Short title", "content": "1-2 sentence insight", "icon": "lightbulb"}
+{"title":"...","content":"...","icon":"book-open"},
+{"title":"...","content":"...","icon":"brain"},
+{"title":"...","content":"...","icon":"atom"},
+{"title":"...","content":"...","icon":"scroll"},
+{"title":"...","content":"...","icon":"lightbulb"}
 ]
-
 Topic: ${topic}`
                     }]
                 }]
@@ -60,31 +105,20 @@ Topic: ${topic}`
         });
 
         const data = await response.json();
-        console.log("Gemini response:", data);
-
-        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
         try {
-            cards = JSON.parse(rawText);
-        } catch (e) {
-            console.error("JSON parse failed:", rawText);
-
-            // fallback if AI fails
-            cards = fallbackLessons[topic] || fallbackLessons["Philosophy"];
+            cards = JSON.parse(text);
+        } catch {
+            cards = fallbackLessons[topic];
         }
 
-        startApp();
-
-    } catch (error) {
-        console.error("Fetch failed:", error);
-
-        // fallback if request fails
-        cards = fallbackLessons[topic] || fallbackLessons["Philosophy"];
-        startApp();
-
-    } finally {
-        showLoader(false);
+    } catch {
+        cards = fallbackLessons[topic];
     }
+
+    showLoader(false);
+    startApp();
 }
 
 function startApp() {
@@ -95,32 +129,20 @@ function startApp() {
 }
 
 function renderCard() {
-    const container = document.getElementById('current-card');
     const card = cards[currentIndex];
+    const container = document.getElementById('current-card');
 
-    if (!card) return;
+    container.innerHTML = `
+        <div class="text-amber-500 text-3xl">
+            <i data-lucide="${card.icon || 'book-open'}"></i>
+        </div>
+        <h2 class="text-2xl font-bold">${card.title}</h2>
+        <p class="text-slate-400">${card.content}</p>
+    `;
 
-    container.classList.add('card-exit');
+    if (window.lucide) lucide.createIcons();
 
-    setTimeout(() => {
-        container.innerHTML = `
-            <div class="text-amber-500/20 mb-4 scale-150">
-                <i data-lucide="${card.icon || 'book-open'}"></i>
-            </div>
-            <h2 class="serif text-4xl font-bold leading-tight text-white px-2">${card.title}</h2>
-            <p class="text-slate-400 text-lg font-light leading-relaxed max-w-[280px]">${card.content}</p>
-        `;
-
-        lucide.createIcons();
-
-        container.classList.remove('card-exit');
-        container.classList.add('card-enter');
-        requestAnimationFrame(() => {
-            container.classList.remove('card-enter');
-        });
-
-        updateUI();
-    }, 300);
+    updateUI();
 }
 
 function nextCard() {
@@ -145,26 +167,16 @@ function updateUI() {
 
     document.getElementById('progress').style.width =
         `${((currentIndex + 1) / cards.length) * 100}%`;
-
-    const nextBtn = document.getElementById('next-btn');
-
-    if (currentIndex === cards.length - 1) {
-        nextBtn.innerHTML = '<i data-lucide="refresh-cw"></i>';
-    } else {
-        nextBtn.innerHTML = '<i data-lucide="chevron-right"></i>';
-    }
-
-    lucide.createIcons();
 }
 
 function showLoader(show) {
     document.getElementById('loader').classList.toggle('hidden', !show);
 }
 
-// init icons safely
 document.addEventListener("DOMContentLoaded", () => {
-    if (window.lucide) {
-        lucide.createIcons();
-    }
+    if (window.lucide) lucide.createIcons();
 });
 </script>
+
+</body>
+</html>
