@@ -1,96 +1,84 @@
 <!DOCTYPE html>
 <html lang="en">
-<<link rel="icon" href="data:,">>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lumina</title>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lumina</title>
 
-    <!-- Tailwind -->
-    <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
 
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="icon" href="data:,">
 </head>
 
 <body class="bg-slate-950 text-white flex items-center justify-center h-screen">
 
-<!-- SETUP SCREEN -->
 <div id="setup-screen" class="text-center space-y-6">
-    <h1 class="text-4xl font-bold">Lumina</h1>
+  <h1 class="text-4xl font-bold">Lumina</h1>
 
-    <input id="api-key" placeholder="(Optional) Gemini API Key"
-        class="px-4 py-2 rounded bg-slate-800 text-white w-64"/>
+  <input id="api-key" placeholder="(Optional) Gemini API Key"
+    class="px-4 py-2 rounded bg-slate-800 w-64"/>
 
-    <div class="space-x-4">
-        <button onclick="setTopic('Philosophy')" class="bg-amber-500 px-4 py-2 rounded">Philosophy</button>
-        <button onclick="setTopic('History')" class="bg-blue-500 px-4 py-2 rounded">History</button>
-    </div>
+  <div class="space-x-4">
+    <button onclick="setTopic('Philosophy')" class="bg-amber-500 px-4 py-2 rounded">Philosophy</button>
+    <button onclick="setTopic('History')" class="bg-blue-500 px-4 py-2 rounded">History</button>
+  </div>
 </div>
 
-<!-- CARD SCREEN -->
-<div id="card-container" class="hidden text-center space-y-6 max-w-md">
+<div id="card-container" class="hidden text-center space-y-6 max-w-md"></div>
 
-    <div id="current-card" class="space-y-4"></div>
-
-    <div class="flex justify-between items-center">
-        <button onclick="prevCard()" class="px-4 py-2 bg-slate-700 rounded">Back</button>
-
-        <span id="card-counter">01 / 05</span>
-
-        <button id="next-btn" onclick="nextCard()" class="px-4 py-2 bg-slate-700 rounded">Next</button>
-    </div>
-
-    <div class="w-full bg-slate-800 h-2 rounded">
-        <div id="progress" class="bg-amber-500 h-2 rounded" style="width: 0%"></div>
-    </div>
-
-</div>
-
-<!-- LOADER -->
-<div id="loader" class="hidden absolute">Loading...</div>
+<div id="loader" class="hidden absolute text-white">Loading...</div>
 
 <script>
 let cards = [];
 let currentIndex = 0;
+let learned = 0;
+let review = [];
 
 const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
 const fallbackLessons = {
-    Philosophy: [
-        { title: "Stoicism", content: "Focus only on what you control.", icon: "brain" },
-        { title: "Virtue", content: "Character defines a good life.", icon: "shield" },
-        { title: "Wisdom", content: "Seek truth, not comfort.", icon: "lightbulb" },
-        { title: "Logos", content: "Reason governs the universe.", icon: "atom" },
-        { title: "Discipline", content: "Master yourself first.", icon: "target" }
-    ],
-    History: [
-        { title: "Patterns", content: "History repeats through human behavior.", icon: "repeat" },
-        { title: "Power", content: "Power shapes narratives.", icon: "crown" },
-        { title: "Conflict", content: "War accelerates change.", icon: "flame" },
-        { title: "Leaders", content: "Individuals can shift history.", icon: "user" },
-        { title: "Lessons", content: "Study the past to predict the future.", icon: "book" }
-    ]
+  Philosophy: [
+    { title: "Stoicism", content: "Focus only on what you control.", icon: "brain" },
+    { title: "Virtue", content: "Character defines a good life.", icon: "shield" },
+    { title: "Wisdom", content: "Seek truth, not comfort.", icon: "lightbulb" },
+    { title: "Logos", content: "Reason governs the universe.", icon: "atom" },
+    { title: "Discipline", content: "Master yourself first.", icon: "target" }
+  ],
+  History: [
+    { title: "Patterns", content: "History repeats through human behavior.", icon: "repeat" },
+    { title: "Power", content: "Power shapes narratives.", icon: "crown" },
+    { title: "Conflict", content: "War accelerates change.", icon: "flame" },
+    { title: "Leaders", content: "Individuals can shift history.", icon: "user" },
+    { title: "Lessons", content: "Study the past to predict the future.", icon: "book" }
+  ]
 };
 
+const today = new Date().toDateString();
+const lastUsed = localStorage.getItem("lastUsed");
+if (lastUsed !== today) {
+  localStorage.setItem("lastUsed", today);
+}
+
 async function setTopic(topic) {
-    const apiKey = document.getElementById('api-key').value;
+  const apiKey = document.getElementById('api-key').value;
 
-    if (!apiKey) {
-        cards = fallbackLessons[topic];
-        startApp();
-        return;
-    }
+  if (!apiKey) {
+    cards = fallbackLessons[topic];
+    startApp();
+    return;
+  }
 
-    showLoader(true);
+  showLoader(true);
 
-    try {
-        const response = await fetch(`${API_URL}?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{
-                    parts: [{
-                        text: `Return ONLY valid JSON:
+  try {
+    const res = await fetch(`${API_URL}?key=${apiKey}`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: `Return ONLY JSON:
 [
 {"title":"...","content":"...","icon":"book-open"},
 {"title":"...","content":"...","icon":"brain"},
@@ -99,83 +87,109 @@ async function setTopic(topic) {
 {"title":"...","content":"...","icon":"lightbulb"}
 ]
 Topic: ${topic}`
-                    }]
-                }]
-            })
-        });
+          }]
+        }]
+      })
+    });
 
-        const data = await response.json();
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const data = await res.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
-        try {
-            cards = JSON.parse(text);
-        } catch {
-            cards = fallbackLessons[topic];
-        }
-
+    try {
+      cards = JSON.parse(text);
     } catch {
-        cards = fallbackLessons[topic];
+      cards = fallbackLessons[topic];
     }
 
-    showLoader(false);
-    startApp();
+  } catch {
+    cards = fallbackLessons[topic];
+  }
+
+  showLoader(false);
+  startApp();
 }
 
 function startApp() {
-    document.getElementById('setup-screen').classList.add('hidden');
-    document.getElementById('card-container').classList.remove('hidden');
-    currentIndex = 0;
-    renderCard();
+  document.getElementById("setup-screen").classList.add("hidden");
+  currentIndex = 0;
+  learned = 0;
+  review = [];
+  renderCard();
 }
 
 function renderCard() {
-    const card = cards[currentIndex];
-    const container = document.getElementById('current-card');
+  const card = cards[currentIndex];
+  const container = document.getElementById("card-container");
 
-    container.innerHTML = `
-        <div class="text-amber-500 text-3xl">
-            <i data-lucide="${card.icon || 'book-open'}"></i>
-        </div>
-        <h2 class="text-2xl font-bold">${card.title}</h2>
-        <p class="text-slate-400">${card.content}</p>
-    `;
+  container.classList.remove("hidden");
 
-    if (window.lucide) lucide.createIcons();
+  container.innerHTML = `
+    <div class="space-y-4">
+      <div class="text-amber-500 text-3xl">
+        <i data-lucide="${card.icon || 'book-open'}"></i>
+      </div>
 
-    updateUI();
+      <h2 class="text-2xl font-bold">${card.title}</h2>
+      <p class="text-slate-400">${card.content}</p>
+
+      <div class="space-y-2 mt-4">
+        <button onclick="markLearned()" class="bg-green-600 px-4 py-2 rounded w-full">
+          I Understand
+        </button>
+
+        <button onclick="markReview()" class="bg-yellow-600 px-4 py-2 rounded w-full">
+          Review Later
+        </button>
+      </div>
+
+      <p class="text-sm text-slate-500">
+        ${currentIndex + 1} / ${cards.length}
+      </p>
+    </div>
+  `;
+
+  if (window.lucide) lucide.createIcons();
+}
+
+function markLearned() {
+  learned++;
+  nextCard();
+}
+
+function markReview() {
+  review.push(cards[currentIndex]);
+  localStorage.setItem("reviewCards", JSON.stringify(review));
+  nextCard();
 }
 
 function nextCard() {
-    if (currentIndex < cards.length - 1) {
-        currentIndex++;
-        renderCard();
-    } else {
-        location.reload();
-    }
+  if (currentIndex < cards.length - 1) {
+    currentIndex++;
+    renderCard();
+  } else {
+    showSummary();
+  }
 }
 
-function prevCard() {
-    if (currentIndex > 0) {
-        currentIndex--;
-        renderCard();
-    }
-}
+function showSummary() {
+  const container = document.getElementById("card-container");
 
-function updateUI() {
-    document.getElementById('card-counter').innerText =
-        `${String(currentIndex + 1).padStart(2, '0')} / ${String(cards.length).padStart(2, '0')}`;
+  container.innerHTML = `
+    <div class="space-y-4">
+      <h2 class="text-3xl font-bold">Session Complete</h2>
+      <p class="text-green-400">Learned: ${learned}</p>
+      <p class="text-yellow-400">Review: ${review.length}</p>
 
-    document.getElementById('progress').style.width =
-        `${((currentIndex + 1) / cards.length) * 100}%`;
+      <button onclick="location.reload()" class="bg-blue-500 px-4 py-2 rounded">
+        Restart
+      </button>
+    </div>
+  `;
 }
 
 function showLoader(show) {
-    document.getElementById('loader').classList.toggle('hidden', !show);
+  document.getElementById("loader").classList.toggle("hidden", !show);
 }
-
-document.addEventListener("DOMContentLoaded", () => {
-    if (window.lucide) lucide.createIcons();
-});
 </script>
 
 </body>
