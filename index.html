@@ -1,194 +1,189 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lumina</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Lumina</title>
 
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
+<link rel="icon" href="data:,">
 
-  <link rel="icon" href="data:,">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+
 </head>
 
-<body class="bg-slate-950 text-white flex items-center justify-center h-screen">
+<body class="bg-slate-900 text-white flex items-center justify-center min-h-screen">
 
-<div id="setup-screen" class="text-center space-y-6">
-  <h1 class="text-4xl font-bold">Lumina</h1>
+<div class="max-w-xl w-full p-6">
 
-  <input id="api-key" placeholder="(Optional) Gemini API Key"
-    class="px-4 py-2 rounded bg-slate-800 w-64"/>
+<div id="home" class="space-y-4 text-center">
+<h1 class="text-4xl font-bold">Lumina</h1>
+<p class="text-slate-400">Learn something new in minutes</p>
 
-  <div class="space-x-4">
-    <button onclick="setTopic('Philosophy')" class="bg-amber-500 px-4 py-2 rounded">Philosophy</button>
-    <button onclick="setTopic('History')" class="bg-blue-500 px-4 py-2 rounded">History</button>
-  </div>
+<div class="space-y-2 mt-4">
+<button onclick="startLesson('Psychology')" class="bg-blue-600 w-full p-3 rounded">Psychology</button>
+<button onclick="startLesson('Philosophy')" class="bg-purple-600 w-full p-3 rounded">Philosophy</button>
+<button onclick="startLesson('Business')" class="bg-green-600 w-full p-3 rounded">Business</button>
+<button onclick="startLesson('Fitness')" class="bg-red-600 w-full p-3 rounded">Fitness</button>
+<button onclick="startLesson('Technology')" class="bg-yellow-600 w-full p-3 rounded">Technology</button>
+</div>
 </div>
 
-<div id="card-container" class="hidden text-center space-y-6 max-w-md"></div>
+<div id="lesson" class="hidden">
+<div class="h-2 bg-slate-700 rounded mb-4">
+<div id="progress-bar" class="h-2 bg-blue-500 rounded"></div>
+</div>
 
-<div id="loader" class="hidden absolute text-white">Loading...</div>
+<div id="card"></div>
+</div>
+
+</div>
 
 <script>
-let cards = [];
-let currentIndex = 0;
+const API_KEY = "PASTE_YOUR_GEMINI_API_KEY_HERE";
+
+let lesson = null;
+let index = 0;
 let learned = 0;
 let review = [];
 
-const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+async function startLesson(topic) {
+document.getElementById("home").classList.add("hidden");
+document.getElementById("lesson").classList.remove("hidden");
 
-const fallbackLessons = {
-  Philosophy: [
-    { title: "Stoicism", content: "Focus only on what you control.", icon: "brain" },
-    { title: "Virtue", content: "Character defines a good life.", icon: "shield" },
-    { title: "Wisdom", content: "Seek truth, not comfort.", icon: "lightbulb" },
-    { title: "Logos", content: "Reason governs the universe.", icon: "atom" },
-    { title: "Discipline", content: "Master yourself first.", icon: "target" }
-  ],
-  History: [
-    { title: "Patterns", content: "History repeats through human behavior.", icon: "repeat" },
-    { title: "Power", content: "Power shapes narratives.", icon: "crown" },
-    { title: "Conflict", content: "War accelerates change.", icon: "flame" },
-    { title: "Leaders", content: "Individuals can shift history.", icon: "user" },
-    { title: "Lessons", content: "Study the past to predict the future.", icon: "book" }
-  ]
-};
+document.getElementById("card").innerHTML = "Generating lesson...";
 
-const today = new Date().toDateString();
-const lastUsed = localStorage.getItem("lastUsed");
-if (lastUsed !== today) {
-  localStorage.setItem("lastUsed", today);
+try {
+
+const res = await fetch(
+"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" + API_KEY,
+{
+method: "POST",
+headers: {"Content-Type":"application/json"},
+body: JSON.stringify({
+contents: [{
+parts: [{
+text: `Create a structured microlearning lesson.
+
+Return ONLY valid JSON:
+
+{
+"lessonTitle": "",
+"overview": "",
+"cards": [
+{"title":"","content":"","icon":"book-open"}
+],
+"summary": ""
 }
 
-async function setTopic(topic) {
-  const apiKey = document.getElementById('api-key').value;
+Rules:
+- 6 to 8 cards
+- Each card teaches ONE idea
+- Clear and practical
 
-  if (!apiKey) {
-    cards = fallbackLessons[topic];
-    startApp();
-    return;
-  }
-
-  showLoader(true);
-
-  try {
-    const res = await fetch(`${API_URL}?key=${apiKey}`, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: `Return ONLY JSON:
-[
-{"title":"...","content":"...","icon":"book-open"},
-{"title":"...","content":"...","icon":"brain"},
-{"title":"...","content":"...","icon":"atom"},
-{"title":"...","content":"...","icon":"scroll"},
-{"title":"...","content":"...","icon":"lightbulb"}
-]
 Topic: ${topic}`
-          }]
-        }]
-      })
-    });
+}]
+}]
+})
+}
+);
 
-    const data = await res.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+const data = await res.json();
+let text = data.candidates[0].content.parts[0].text;
 
-    try {
-      cards = JSON.parse(text);
-    } catch {
-      cards = fallbackLessons[topic];
-    }
+text = text.replace(/```json/g, "").replace(/```/g, "");
 
-  } catch {
-    cards = fallbackLessons[topic];
-  }
+lesson = JSON.parse(text);
 
-  showLoader(false);
-  startApp();
+index = 0;
+learned = 0;
+review = [];
+
+render();
+
+} catch (e) {
+console.error(e);
+document.getElementById("card").innerHTML =
+"<p>Error generating lesson.</p><button onclick='location.reload()' class='mt-4 bg-blue-500 px-4 py-2 rounded'>Retry</button>";
+}
 }
 
-function startApp() {
-  document.getElementById("setup-screen").classList.add("hidden");
-  currentIndex = 0;
-  learned = 0;
-  review = [];
-  renderCard();
+function render() {
+const c = lesson.cards[index];
+
+const progress = ((index) / lesson.cards.length) * 100;
+document.getElementById("progress-bar").style.width = progress + "%";
+
+document.getElementById("card").innerHTML = `
+<div class="space-y-4">
+
+${index === 0 ? `
+<div>
+<h1 class="text-3xl font-bold">${lesson.lessonTitle}</h1>
+<p class="text-slate-400">${lesson.overview}</p>
+</div>
+` : ""}
+
+<div class="text-amber-500 text-3xl">
+<i data-lucide="${c.icon || 'book-open'}"></i>
+</div>
+
+<h2 class="text-2xl font-bold">${c.title}</h2>
+<p class="text-slate-400">${c.content}</p>
+
+<div class="flex gap-2 mt-4">
+<button onclick="understand()" class="bg-green-600 flex-1 p-2 rounded">Got it</button>
+<button onclick="later()" class="bg-yellow-600 flex-1 p-2 rounded">Review</button>
+</div>
+
+<p class="text-center text-sm text-slate-500">
+${index + 1} / ${lesson.cards.length}
+</p>
+
+</div>
+`;
+
+lucide.createIcons();
 }
 
-function renderCard() {
-  const card = cards[currentIndex];
-  const container = document.getElementById("card-container");
-
-  container.classList.remove("hidden");
-
-  container.innerHTML = `
-    <div class="space-y-4">
-      <div class="text-amber-500 text-3xl">
-        <i data-lucide="${card.icon || 'book-open'}"></i>
-      </div>
-
-      <h2 class="text-2xl font-bold">${card.title}</h2>
-      <p class="text-slate-400">${card.content}</p>
-
-      <div class="space-y-2 mt-4">
-        <button onclick="markLearned()" class="bg-green-600 px-4 py-2 rounded w-full">
-          I Understand
-        </button>
-
-        <button onclick="markReview()" class="bg-yellow-600 px-4 py-2 rounded w-full">
-          Review Later
-        </button>
-      </div>
-
-      <p class="text-sm text-slate-500">
-        ${currentIndex + 1} / ${cards.length}
-      </p>
-    </div>
-  `;
-
-  if (window.lucide) lucide.createIcons();
+function understand() {
+learned++;
+next();
 }
 
-function markLearned() {
-  learned++;
-  nextCard();
+function later() {
+review.push(lesson.cards[index]);
+next();
 }
 
-function markReview() {
-  review.push(cards[currentIndex]);
-  localStorage.setItem("reviewCards", JSON.stringify(review));
-  nextCard();
+function next() {
+index++;
+if (index >= lesson.cards.length) {
+summary();
+} else {
+render();
+}
 }
 
-function nextCard() {
-  if (currentIndex < cards.length - 1) {
-    currentIndex++;
-    renderCard();
-  } else {
-    showSummary();
-  }
-}
+function summary() {
+document.getElementById("progress-bar").style.width = "100%";
 
-function showSummary() {
-  const container = document.getElementById("card-container");
+document.getElementById("card").innerHTML = `
+<div class="text-center space-y-4">
 
-  container.innerHTML = `
-    <div class="space-y-4">
-      <h2 class="text-3xl font-bold">Session Complete</h2>
-      <p class="text-green-400">Learned: ${learned}</p>
-      <p class="text-yellow-400">Review: ${review.length}</p>
+<h2 class="text-3xl font-bold">${lesson.lessonTitle} Complete</h2>
 
-      <button onclick="location.reload()" class="bg-blue-500 px-4 py-2 rounded">
-        Restart
-      </button>
-    </div>
-  `;
-}
+<p class="text-slate-400">${lesson.summary}</p>
 
-function showLoader(show) {
-  document.getElementById("loader").classList.toggle("hidden", !show);
+<p class="text-green-400">Learned: ${learned}</p>
+<p class="text-yellow-400">Review: ${review.length}</p>
+
+<button onclick="location.reload()" class="bg-blue-600 px-4 py-2 rounded">
+New Lesson
+</button>
+
+</div>
+`;
 }
 </script>
 
